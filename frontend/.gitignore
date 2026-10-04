@@ -1,0 +1,36 @@
+# Dependencies
+/node_modules
+
+# Next.js Build Outputs
+/.next/
+/out/
+/build
+
+# Environment Files (Protects secrets while tracking templates)
+.env
+.env*.local
+!.env.example
+
+# Debug & Logs
+*.log
+pnpm-debug.log*
+
+# Testing & Coverage
+/coverage
+
+# TypeScript Build Info
+*.tsbuildinfo
+
+# Deployment & Vercel
+.vercel
+
+# OS & Temp Files
+.DS_Store
+Thumbs.db
+*.pem
+
+# Editor Artifacts
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

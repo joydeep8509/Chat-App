@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@theme {
+  --animate-message-in: slideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+  @keyframes slideIn {
+    0% {
+      opacity: 0;
+      transform: translateY(14px) scale(0.98);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* Scrollbar Removal */
+::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
+
+body {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
