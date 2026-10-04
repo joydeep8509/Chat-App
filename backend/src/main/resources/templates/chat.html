@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pyramid - Real-Time Chat</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SockJS and STOMP Web Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    <!-- Google Identity Services (GIS) API -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <style>
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        body { -ms-overflow-style: none; scrollbar-width: none; }
+
+        @keyframes slideIn {
+            0% { opacity: 0; transform: translateY(14px) scale(0.98); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .animate-message {
+            animation: slideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* --- Responsive Viewport Breakpoints --- */
+        @media (max-width: 768px) {
+            .max-w-\[1200px\] {
+                flex-direction: column !important;
+                height: 96vh !important;
+                border-radius: 1.5rem !important;
+            }
+
+            .w-\[320px\] {
+                width: 100% !important;
+                max-height: 32vh !important;
+                border-right: none !important;
+                border-bottom: 1px solid rgba(226, 232, 240, 0.8) !important;
+            }
+
+            .px-8 {
+                padding-left: 1rem !important;
+                padding-right: 1rem !important;
+            }
+            .py-6 {
+                padding-top: 0.75rem !important;
+                padding-bottom: 0.75rem !important;
+            }
+            .pb-8 {
+                padding-bottom: 1rem !important;
+            }
+
+            .text-\[22px\] {
+                font-size: 1.25rem !important;
+            }
+            .max-w-\[75\%\] {
+                max-width: 90% !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .flex.items-center.gap-3.text-slate-400 > button:not(:last-child) {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-emerald-100/70 via-slate-100 to-emerald-100/50 min-h-screen flex items-center justify-center p-3 md:p-6 font-sans text-slate-800 antialiased selection:bg-emerald-500/30">
+
+<!-- ========================================== -->
+<!-- 1. AUTH SCREEN (THEMED TO EMERALD GREEN)  -->
+<!-- ========================================== -->
+<div id="authScreen" class="w-full max-w-[420px] flex flex-col items-center justify-center transition-all duration-300">
+
+    <!-- Brand Header -->
+    <div class="flex items-center gap-2.5 mb-7">
+        <div class="w-9 h-9 bg-emerald-900 rounded-xl flex items-center justify-center text-white shadow-md shadow-emerald-900/20 border border-emerald-700/30">
+            <!-- Pyramid Icon -->
+            <svg class="w-5 h-5 text-emerald-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2L2 22h20L12 2z" />
+                <path d="M12 2v20" />
+            </svg>
+        </div>
+        <span class="text-2xl font-bold tracking-tight text-slate-900">Pyramid</span>
+    </div>
+
+    <!-- Auth Card with Soft Emerald Glass & Shadow -->
+    <div class="w-full bg-white/90 backdrop-blur-2xl rounded-[30px] border border-emerald-500/20 shadow-[0_20px_50px_-15px_rgba(16,185,129,0.18)] p-8 md:p-9 flex flex-col items-center ring-1 ring-black/[0.02]">
+        <div class="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center text-xl mb-3 shadow-inner">
+            💬
+        </div>
+        <h2 class="text-2xl font-bold text-slate-900 text-center tracking-tight">Let's get back on track</h2>
+        <p class="text-[13px] text-slate-500 text-center mt-1.5 mb-7">Enter your email below to login to your account.</p>
+
+        <!-- Actions Container -->
+        <div class="w-full space-y-3">
+            <!-- Continue as Guest Button -->
+            <button id="guestLoginBtn" type="button"
+                    class="w-full bg-slate-900 hover:bg-emerald-950 active:scale-[0.99] text-white font-medium py-3.5 rounded-full text-[14px] transition duration-200 shadow-md hover:shadow-emerald-950/20 flex items-center justify-center">
+                Continue as Guest
+            </button>
+
+            <!-- Real Google Login Button -->
+            <button id="googleLoginBtn" type="button"
+                    class="w-full bg-white hover:bg-emerald-50/50 active:scale-[0.99] border border-slate-200 hover:border-emerald-300 text-slate-700 font-medium py-3.5 rounded-full text-[14px] transition duration-200 shadow-sm flex items-center justify-center gap-3">
+                <!-- 4-Color Official Google Icon -->
+                <svg class="w-4 h-4" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                </svg>
+                <span>Login with Google</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Terms and Policy Footer -->
+    <p class="text-[12px] text-slate-500 text-center mt-7 leading-relaxed">
+        By clicking continue, you agree to our <a href="#" class="underline hover:text-emerald-700">Terms of Service</a> and <a href="#" class="underline hover:text-emerald-700">Privacy Policy</a>
+    </p>
+</div>
+
+<!-- ========================================== -->
+<!-- 2. MAIN CHAT APPLICATION CONTAINER        -->
+<!-- ========================================== -->
+<div id="chatAppContainer" class="hidden w-full max-w-[1200px] h-[86vh] bg-white/75 backdrop-blur-3xl rounded-[2.5rem] shadow-[0_30px_60px_-15px_rgba(16,185,129,0.15),0_0_0_1px_rgba(255,255,255,0.6)] overflow-hidden ring-1 ring-emerald-500/10">
+
+    <!-- Sidebar -->
+    <div class="w-[320px] bg-white/50 flex flex-col border-r border-slate-200/60 z-20">
+        <div class="p-6 pb-2">
+            <div class="bg-white/70 hover:bg-white focus-within:bg-white backdrop-blur-sm rounded-[20px] px-4 py-3 flex items-center gap-3 border border-slate-200/80 shadow-sm focus-within:shadow-md focus-within:border-emerald-500/40 focus-within:ring-4 focus-within:ring-emerald-500/10 transition-all duration-300">
+                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                <input type="text" class="bg-transparent w-full focus:outline-none text-[15px] placeholder-slate-400 text-slate-800 font-medium tracking-tight" placeholder="Search">
+            </div>
+        </div>
+
+        <div class="px-6 py-2">
+            <div class="flex items-center gap-2 mb-2.5 ml-1 text-emerald-600">
+                <svg id="nameStatusIcon" class="w-4 h-4 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+                <span id="nameStatusLabel" class="text-[12px] font-bold uppercase tracking-wider">Logged In User</span>
+            </div>
+
+            <!-- Connected User Input & Logout Button -->
+            <div class="flex items-center gap-2">
+                <div class="relative w-full">
+                    <input id="senderInput" type="text"
+                           class="w-full text-[14px] text-slate-800 bg-white/60 backdrop-blur-sm border border-slate-200/80 rounded-[16px] px-4 py-2.5 pr-8 focus:outline-none focus:border-emerald-500/60 focus:ring-4 focus:ring-emerald-500/10 focus:bg-white hover:border-slate-300 transition-all font-medium placeholder-slate-400 shadow-sm"
+                           placeholder="e.g. Joydeep..." />
+                    <!-- Lock Icon for Google Verified Accounts -->
+                    <span id="lockBadge" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-emerald-600 pointer-events-none" title="Google Account: Name is locked">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                        </svg>
+                    </span>
+                </div>
+                <button id="logoutBtn" type="button" title="Logout" class="p-2.5 rounded-[14px] bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors shrink-0 shadow-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto px-4 py-2 space-y-2 mt-1">
+            <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 text-white rounded-[22px] p-3.5 flex items-center gap-3 cursor-pointer relative shadow-[0_12px_24px_-8px_rgba(16,185,129,0.5)] border border-emerald-400/30 group hover:shadow-[0_16px_32px_-8px_rgba(16,185,129,0.6)] hover:-translate-y-0.5 transition-all duration-300">
+                <div id="sidebarUserAvatar" class="w-12 h-12 bg-white/20 backdrop-blur-md rounded-[14px] flex items-center justify-center text-lg font-bold tracking-wider border border-white/20 shadow-inner overflow-hidden shrink-0">
+                    DC
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex justify-between items-baseline mb-0.5">
+                        <h3 class="font-semibold text-[15px] truncate tracking-tight">Joydeep's chat</h3>
+                        <span class="text-[12px] text-emerald-50 font-medium">Now</span>
+                    </div>
+                    <p class="text-[13px] text-emerald-100/90 truncate font-light">Chatting globally...</p>
+                </div>
+                <div class="absolute right-3.5 bottom-3 flex items-center gap-2">
+                    <div class="w-5 h-5 bg-white text-emerald-700 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm">1</div>
+                    <svg class="w-4 h-4 text-emerald-200/80" fill="currentColor" viewBox="0 0 24 24"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Chat Window -->
+    <div class="flex-1 flex flex-col bg-slate-50/40 relative">
+
+        <!-- Top Header -->
+        <div class="px-8 py-6 border-b border-slate-200/60 flex justify-between items-center bg-white/60 backdrop-blur-xl z-10">
+            <div>
+                <h1 class="text-[22px] font-bold text-slate-900 leading-tight tracking-tight">Real-Time chat-hub</h1>
+                <p class="text-[14px] text-emerald-600 font-medium mt-0.5 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse"></span>
+                    Global Room, currently online
+                </p>
+            </div>
+            <div class="flex items-center gap-3 text-slate-400">
+                <button class="p-2 rounded-full hover:text-slate-800 hover:bg-slate-200/50 transition-all duration-200"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></button>
+                <button class="p-2 rounded-full hover:text-slate-800 hover:bg-slate-200/50 transition-all duration-200"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg></button>
+                <button class="p-2 rounded-full hover:text-slate-800 hover:bg-slate-200/50 transition-all duration-200"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg></button>
+            </div>
+        </div>
+
+        <!-- Chat Scroll Feed -->
+        <div id="chat" class="flex-1 overflow-y-auto px-8 py-6 space-y-6 scroll-smooth flex flex-col">
+            <div class="text-center text-xs text-emerald-800/60 font-semibold tracking-widest uppercase py-2 shrink-0">Connected to Design Chat WebSocket</div>
+
+            <div id="welcomeScreen" class="flex-1 flex flex-col items-center justify-center opacity-75 mt-10">
+                <div class="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 mb-4 shadow-sm border border-emerald-200/60">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                </div>
+                <h3 class="text-slate-800 font-semibold text-lg mb-1">Welcome to the Chat Hub!</h3>
+                <p id="welcomeGreeting" class="text-slate-500 text-[15px] flex items-center gap-2 mt-1">
+                    Send photos, videos, or messages in real time.
+                </p>
+            </div>
+        </div>
+
+        <!-- Attachment Live Preview Dock -->
+        <div id="attachmentDock" class="hidden px-8 pt-2 pb-0 z-10">
+            <div class="bg-white/95 backdrop-blur-md border border-emerald-500/20 rounded-[20px] p-2.5 px-4 flex items-center justify-between shadow-sm animate-message ring-1 ring-emerald-500/10">
+                <div class="flex items-center gap-3 overflow-hidden">
+                    <img id="dockThumb" src="" alt="preview" class="hidden w-11 h-11 rounded-[12px] object-cover border border-slate-200 shrink-0" />
+                    <div id="dockFileIcon" class="hidden w-11 h-11 rounded-[12px] bg-emerald-100 text-emerald-700 font-bold text-lg flex items-center justify-center shrink-0">📎</div>
+                    <div class="flex flex-col overflow-hidden">
+                        <span id="dockFileName" class="text-[13px] font-semibold text-slate-800 truncate max-w-[280px]">filename.jpg</span>
+                        <span id="dockFileSize" class="text-[11px] text-slate-400 font-medium">0 KB</span>
+                    </div>
+                </div>
+                <button type="button" id="cancelAttachmentBtn" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-red-500 flex items-center justify-center transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Chat Input Bar -->
+        <div class="px-8 pb-8 pt-4 bg-transparent z-10">
+            <div class="bg-white/85 backdrop-blur-2xl border border-slate-200/80 rounded-[24px] p-2 pl-6 pr-3 flex items-center gap-3 shadow-[0_8px_30px_-5px_rgba(16,185,129,0.08)] focus-within:shadow-[0_8px_30px_-5px_rgba(16,185,129,0.18)] focus-within:border-emerald-500/40 focus-within:ring-4 focus-within:ring-emerald-500/10 transition-all duration-300">
+
+                <!-- Hidden Multimedia Picker -->
+                <input type="file" id="mediaInput" accept="image/*,video/*,application/pdf,text/plain" class="hidden" />
+
+                <!-- Attachment Button -->
+                <button type="button" id="attachBtn" title="Send Photo, Video or File" class="text-slate-400 hover:text-emerald-700 transition-colors shrink-0">
+                    <svg class="w-5 h-5 rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                </button>
+
+                <!-- Text / Caption Input -->
+                <input id="messageInput" type="text"
+                       class="w-full bg-transparent border-none focus:outline-none text-[15px] placeholder-slate-400 text-slate-800 font-medium tracking-tight"
+                       placeholder="Your message or caption..." />
+
+                <div class="flex items-center gap-2 shrink-0">
+                    <button type="button" class="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                    </button>
+                    <button id="sendMessage" disabled
+                            class="w-10 h-10 bg-slate-900 rounded-full flex items-center justify-center text-white shadow-[0_6px_15px_-3px_rgba(15,23,42,0.4)] hover:bg-emerald-900 hover:shadow-[0_8px_20px_-3px_rgba(6,78,59,0.5)] hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-40 disabled:hover:bg-slate-900 disabled:hover:-translate-y-0 disabled:shadow-none">
+                        <svg class="w-5 h-5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Fullscreen Lightbox Modal for Photos -->
+<div id="imageModal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 backdrop-blur-sm cursor-pointer" onclick="this.classList.add('hidden')">
+    <img id="modalImg" src="" alt="Enlarged preview" class="max-w-[90vw] max-h-[90vh] rounded-2xl shadow-2xl object-contain border border-white/20" />
+</div>
+
+<script>
+    // ==========================================
+    // CONFIGURATION & CACHED DOM REFS
+    // ==========================================
+    const GOOGLE_CLIENT_ID = "953413173159-l7k9kfklf5ed2o1nkcvfugueiqmpld7k.apps.googleusercontent.com";
+    const SESSION_STORAGE_KEY = "pyramid_user_session";
+
+    let currentUser = null;
+    let stompClient = null;
+    let selectedFile = null;
+    let tokenClient = null;
+
+    // Cache elements to avoid repetitive query lookups
+    const authScreen = document.getElementById('authScreen');
+    const chatAppContainer = document.getElementById('chatAppContainer');
+    const guestLoginBtn = document.getElementById('guestLoginBtn');
+    const googleLoginBtn = document.getElementById('googleLoginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const senderInput = document.getElementById('senderInput');
+    const nameStatusLabel = document.getElementById('nameStatusLabel');
+    const nameStatusIcon = document.getElementById('nameStatusIcon');
+    const lockBadge = document.getElementById('lockBadge');
+    const sidebarUserAvatar = document.getElementById('sidebarUserAvatar');
+    const chatFeed = document.getElementById('chat');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendMessage');
+    const attachBtn = document.getElementById('attachBtn');
+    const mediaInput = document.getElementById('mediaInput');
+    const attachmentDock = document.getElementById('attachmentDock');
+    const dockThumb = document.getElementById('dockThumb');
+    const dockFileIcon = document.getElementById('dockFileIcon');
+    const dockFileName = document.getElementById('dockFileName');
+    const dockFileSize = document.getElementById('dockFileSize');
+    const cancelAttachmentBtn = document.getElementById('cancelAttachmentBtn');
+    const modalImg = document.getElementById('modalImg');
+    const imageModal = document.getElementById('imageModal');
+
+    // ==========================================
+    // AUTO-RESTORE ACTIVE SESSION ON LOAD / REFRESH
+    // ==========================================
+    async function restoreSessionOnLoad() {
+        // Step 1: Check Local Storage first for instantaneous restoration
+        const storedUserJson = localStorage.getItem(SESSION_STORAGE_KEY);
+        if (storedUserJson) {
+            try {
+                const cachedUser = JSON.parse(storedUserJson);
+                if (cachedUser && cachedUser.name) {
+                    await loginUser(cachedUser, false); // false = already saved to storage
+                    return;
+                }
+            } catch (e) {
+                localStorage.removeItem(SESSION_STORAGE_KEY);
+            }
+        }
+
+        // Step 2: Fallback check against backend Spring Session (/api/auth/me)
+        try {
+            const res = await fetch('/api/auth/me');
+            if (res.ok) {
+                const sessionUser = await res.json();
+                if (sessionUser && sessionUser.name) {
+                    await loginUser(sessionUser, true);
+                }
+            }
+        } catch (e) {
+            console.log("No active server session found.");
+        }
+    }
+
+    // ==========================================
+    // GOOGLE OAUTH 2.0 TOKEN CLIENT SETUP
+    // ==========================================
+    function initGoogleClient() {
+        if (window.google?.accounts?.oauth2) {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: GOOGLE_CLIENT_ID,
+                scope: 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email openid',
+                callback: async (tokenResponse) => {
+                    if (tokenResponse?.access_token) {
+                        try {
+                            const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                                headers: { 'Authorization': `Bearer ${tokenResponse.access_token}` }
+                            });
+                            if (!res.ok) throw new Error("Could not retrieve user info from Google");
+
+                            const googleUser = await res.json();
+                            loginUser({
+                                name: googleUser.name || googleUser.given_name || "Google User",
+                                email: googleUser.email,
+                                picture: googleUser.picture || null,
+                                isGuest: false
+                            }, true);
+                        } catch (err) {
+                            console.error("Google user info error:", err);
+                            alert("Failed to load Google account data. Please try again.");
+                        }
+                    }
+                },
+                error_callback: (error) => console.error("Google Auth error:", error)
+            });
+        }
+    }
+
+    window.addEventListener('load', () => {
+        // Check and restore existing session immediately
+        restoreSessionOnLoad();
+
+        if (window.google) {
+            initGoogleClient();
+        } else {
+            const checkGsi = setInterval(() => {
+                if (window.google) {
+                    initGoogleClient();
+                    clearInterval(checkGsi);
+                }
+            }, 100);
+        }
+    });
+
+    googleLoginBtn.addEventListener('click', () => {
+        if (!tokenClient) initGoogleClient();
+        if (tokenClient) {
+            tokenClient.requestAccessToken({ prompt: 'select_account' });
+        } else {
+            alert("Google Services are loading. Please try again in a moment.");
+        }
+    });
+
+    guestLoginBtn.addEventListener('click', () => {
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        loginUser({
+            name: `Guest_${randomNum}`,
+            email: null,
+            picture: null,
+            isGuest: true
+        }, true);
+    });
+
+    // If a guest edits their name, update both storage and server session dynamically
+    senderInput.addEventListener('input', () => {
+        if (currentUser && currentUser.isGuest) {
+            const newName = senderInput.value.trim();
+            if (newName) {
+                currentUser.name = newName;
+                localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(currentUser));
+                sidebarUserAvatar.textContent = newName.substring(0, 2).toUpperCase();
+
+                // Sync with server session
+                fetch('/api/auth/session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentUser)
+                }).catch(() => {});
+            }
+        }
+    });
+
+    // ==========================================
+    // USER SESSION & LOCK LOGIC
+    // ==========================================
+    async function loginUser(user, shouldSaveToStorage = true) {
+        currentUser = user;
+        senderInput.value = user.name;
+
+        // Persist session to LocalStorage so page refreshes never log out
+        if (shouldSaveToStorage) {
+            localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
+        }
+
+        // Persist session to Spring Boot backend
+        fetch('/api/auth/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(user)
+        }).catch(err => console.log('Session sync notice:', err));
+
+        // Google Verified: ReadOnly lock | Guest: Editable
+        if (!user.isGuest) {
+            senderInput.readOnly = true;
+            senderInput.classList.add('cursor-not-allowed', 'bg-slate-100/80', 'text-slate-600', 'select-none');
+            senderInput.classList.remove('focus:bg-white', 'focus:ring-emerald-500/10', 'focus:border-emerald-500/60');
+            nameStatusLabel.textContent = "Google Verified (Locked)";
+            nameStatusLabel.className = "text-[12px] font-bold uppercase tracking-wider text-emerald-700";
+            nameStatusIcon.classList.remove('animate-bounce');
+            lockBadge.classList.remove('hidden');
+        } else {
+            senderInput.readOnly = false;
+            senderInput.classList.remove('cursor-not-allowed', 'bg-slate-100/80', 'text-slate-600', 'select-none');
+            senderInput.classList.add('focus:bg-white', 'focus:ring-emerald-500/10', 'focus:border-emerald-500/60');
+            nameStatusLabel.textContent = "Guest User (Editable)";
+            nameStatusLabel.className = "text-[12px] font-bold uppercase tracking-wider text-emerald-600";
+            nameStatusIcon.classList.add('animate-bounce');
+            lockBadge.classList.add('hidden');
+        }
+
+        // Render user avatar in sidebar
+        if (user.picture) {
+            sidebarUserAvatar.innerHTML = `<img src="${user.picture}" class="w-full h-full object-cover">`;
+        } else {
+            sidebarUserAvatar.textContent = user.name.substring(0, 2).toUpperCase();
+        }
+
+        // Switch Views smoothly
+        authScreen.classList.add('hidden');
+        chatAppContainer.classList.remove('hidden');
+        chatAppContainer.classList.add('flex');
+
+        // Load full message history from database, then connect STOMP
+        await loadHistoricalMessages();
+        connect();
+    }
+
+    async function loadHistoricalMessages() {
+        try {
+            const res = await fetch('/api/messages/history');
+            if (!res.ok) throw new Error("Could not load history");
+            const messages = await res.json();
+
+            if (messages && messages.length > 0) {
+                const welcomeScreen = document.getElementById('welcomeScreen');
+                if (welcomeScreen) welcomeScreen.remove();
+
+                const frag = document.createDocumentFragment();
+                messages.forEach(msg => {
+                    const el = createMessageElement(msg, false);
+                    frag.appendChild(el);
+                });
+                chatFeed.appendChild(frag);
+                scrollToBottom(false);
+            }
+        } catch (e) {
+            console.error("Failed to load history:", e);
+        }
+    }
+
+    logoutBtn.addEventListener('click', () => {
+        // Clear stored persistence token on explicit logout
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+
+        fetch('/api/auth/logout', { method: 'POST' }).finally(() => {
+            if (stompClient) stompClient.disconnect();
+            chatAppContainer.classList.add('hidden');
+            chatAppContainer.classList.remove('flex');
+            authScreen.classList.remove('hidden');
+
+            senderInput.readOnly = false;
+            senderInput.classList.remove('cursor-not-allowed', 'bg-slate-100/80', 'text-slate-600', 'select-none');
+            senderInput.classList.add('focus:bg-white', 'focus:ring-emerald-500/10', 'focus:border-emerald-500/60');
+            lockBadge.classList.add('hidden');
+            currentUser = null;
+
+            // Reset chat feed state
+            chatFeed.innerHTML = `
+                <div class="text-center text-xs text-emerald-800/60 font-semibold tracking-widest uppercase py-2 shrink-0">Connected to Design Chat WebSocket</div>
+                <div id="welcomeScreen" class="flex-1 flex flex-col items-center justify-center opacity-75 mt-10">
+                    <div class="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 mb-4 shadow-sm border border-emerald-200/60">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    </div>
+                    <h3 class="text-slate-800 font-semibold text-lg mb-1">Welcome to the Chat Hub!</h3>
+                    <p id="welcomeGreeting" class="text-slate-500 text-[15px] flex items-center gap-2 mt-1">
+                        Send photos, videos, or messages in real time.
+                    </p>
+                </div>
+            `;
+        });
+    });
+
+    // ==========================================
+    // STOMP WEBSOCKET & MEDIA ENGINE
+    // ==========================================
+    function setConnected(connected) {
+        if (sendBtn) sendBtn.disabled = !connected;
+    }
+
+    function formatBytes(bytes) {
+        if (!bytes || bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    function connect() {
+        // Avoid duplicate active STOMP connections
+        if (stompClient && stompClient.connected) return;
+
+        const socket = new SockJS('/chat');
+        stompClient = Stomp.over(socket);
+        stompClient.debug = null; // Suppress verbose frame dumps
+        stompClient.connect({}, () => {
+            setConnected(true);
+            stompClient.subscribe('/topic/messages', (message) => {
+                showMessage(JSON.parse(message.body), true);
+            });
+        });
+    }
+
+    // Attachment Interactions
+    attachBtn.onclick = () => mediaInput.click();
+
+    mediaInput.onchange = (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+            selectedFile = e.target.files[0];
+            attachmentDock.classList.remove('hidden');
+            dockFileName.textContent = selectedFile.name;
+            dockFileSize.textContent = formatBytes(selectedFile.size);
+
+            if (selectedFile.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    dockThumb.src = evt.target.result;
+                    dockThumb.classList.remove('hidden');
+                    dockFileIcon.classList.add('hidden');
+                };
+                reader.readAsDataURL(selectedFile);
+            } else {
+                dockThumb.classList.add('hidden');
+                dockFileIcon.classList.remove('hidden');
+                dockFileIcon.textContent = selectedFile.type.startsWith('video/') ? '🎥' : '📄';
+            }
+        }
+    };
+
+    function clearAttachment() {
+        selectedFile = null;
+        mediaInput.value = '';
+        dockThumb.src = '';
+        attachmentDock.classList.add('hidden');
+    }
+
+    cancelAttachmentBtn.onclick = clearAttachment;
+
+    function renderMediaContent(message, isMine) {
+        if (!message.mediaUrl) return '';
+
+        let html = '';
+        if (message.type === 'IMAGE') {
+            html += `
+                <div class="mb-2">
+                    <img src="${message.mediaUrl}"
+                         alt="${message.fileName || 'Photo'}"
+                         loading="lazy"
+                         class="rounded-[16px] max-w-full max-h-72 object-cover cursor-pointer hover:opacity-95 transition-opacity border ${isMine ? 'border-slate-700/60' : 'border-slate-200/60'}"
+                         onclick="openModal('${message.mediaUrl}')" />
+                </div>
+            `;
+        } else if (message.type === 'VIDEO') {
+            html += `
+                <div class="mb-2">
+                    <video src="${message.mediaUrl}" controls preload="metadata" class="rounded-[16px] max-w-full max-h-72 outline-none border ${isMine ? 'border-slate-700/60' : 'border-slate-200/60'}"></video>
+                </div>
+            `;
+        } else if (message.type === 'FILE') {
+            html += `
+                <a href="${message.mediaUrl}" download="${message.fileName || 'file'}" target="_blank"
+                   class="flex items-center gap-3 p-2.5 rounded-[16px] ${isMine ? 'bg-white/10 hover:bg-white/15 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-800'} transition-all mb-2 no-underline">
+                    <div class="w-10 h-10 rounded-xl ${isMine ? 'bg-white/20' : 'bg-white'} flex items-center justify-center text-xl shrink-0">📄</div>
+                    <div class="flex flex-col min-w-0 pr-2">
+                        <span class="text-[13px] font-semibold truncate max-w-[190px]">${message.fileName || 'Attachment'}</span>
+                        <span class="text-[11px] opacity-70">${formatBytes(message.fileSize)}</span>
+                    </div>
+                </a>
+            `;
+        }
+        return html;
+    }
+
+    function openModal(src) {
+        modalImg.src = src;
+        imageModal.classList.remove('hidden');
+    }
+
+    function createMessageElement(message, withAnimation = true) {
+        const messageElement = document.createElement('div');
+        const currentSender = senderInput.value.trim();
+        const isMine = message.sender === currentSender && currentSender !== "";
+
+        let timeString;
+        if (message.timestamp) {
+            const dt = new Date(message.timestamp);
+            timeString = isNaN(dt.getTime())
+                ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } else {
+            timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        const mediaHtml = renderMediaContent(message, isMine);
+        const textHtml = message.content ? `<p class="text-[15px] leading-relaxed font-normal tracking-tight">${message.content}</p>` : '';
+
+        const avatarHtml = message.avatarUrl
+            ? `<img src="${message.avatarUrl}" class="w-full h-full object-cover">`
+            : (isMine
+                ? `<img src="https://i.pravatar.cc/150?img=5" class="w-full h-full object-cover">`
+                : message.sender.charAt(0).toUpperCase());
+
+        const animClass = withAnimation ? "animate-message" : "";
+
+        if (isMine) {
+            messageElement.className = `flex w-full justify-end ${animClass}`;
+            messageElement.innerHTML = `
+                <div class="flex gap-3 max-w-[75%] flex-row-reverse items-end group">
+                    <div class="w-9 h-9 rounded-full bg-slate-200 shrink-0 overflow-hidden border-[2px] border-white shadow-sm flex items-center justify-center text-xs font-bold text-slate-700">
+                        ${avatarHtml}
+                    </div>
+                    <div class="flex flex-col items-end">
+                        <div class="text-[13px] font-bold text-slate-500 mb-1.5 mr-1 tracking-tight">${message.sender}</div>
+                        <div class="bg-slate-900 text-white p-4 py-3.5 rounded-[22px] rounded-br-[6px] shadow-[0_8px_20px_-6px_rgba(15,23,42,0.3)] mb-1.5 border border-slate-700/50 transform transition-transform duration-300 origin-bottom-right hover:scale-[1.01]">
+                            ${mediaHtml}
+                            ${textHtml}
+                        </div>
+                        <div class="flex justify-end items-center gap-1.5 text-[11px] font-semibold text-slate-400 pr-1">
+                            <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                            <span>10</span>
+                            <span class="ml-1 tracking-wide">${timeString}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            messageElement.className = `flex w-full justify-start ${animClass}`;
+            messageElement.innerHTML = `
+                <div class="flex gap-3 max-w-[75%] items-end group">
+                    <div class="w-9 h-9 rounded-[14px] bg-gradient-to-br from-emerald-100 to-emerald-200 shrink-0 overflow-hidden border-[2px] border-white shadow-sm flex items-center justify-center text-emerald-700 font-bold text-sm">
+                        ${avatarHtml}
+                    </div>
+                    <div class="flex flex-col items-start">
+                        <div class="text-[13px] font-bold text-slate-500 mb-1.5 ml-1 tracking-tight">${message.sender}</div>
+                        <div class="bg-white text-slate-800 p-4 py-3.5 rounded-[22px] rounded-bl-[6px] shadow-[0_4px_15px_-5px_rgba(0,0,0,0.05)] mb-1.5 border border-slate-100 transform transition-transform duration-300 origin-bottom-left hover:scale-[1.01]">
+                            ${mediaHtml}
+                            ${textHtml}
+                        </div>
+                        <div class="flex justify-start items-center gap-1.5 text-[11px] font-semibold text-slate-400 pl-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                            <span>12</span>
+                            <span class="ml-1 tracking-wide">${timeString}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        return messageElement;
+    }
+
+    function showMessage(message, withAnimation = true) {
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        if (welcomeScreen) welcomeScreen.remove();
+
+        const el = createMessageElement(message, withAnimation);
+        chatFeed.appendChild(el);
+        scrollToBottom(true);
+    }
+
+    function scrollToBottom(smooth = true) {
+        if (smooth) {
+            chatFeed.scrollTo({ top: chatFeed.scrollHeight, behavior: 'smooth' });
+        } else {
+            chatFeed.scrollTop = chatFeed.scrollHeight;
+        }
+    }
+
+    async function sendMessage() {
+        const sender = senderInput.value.trim();
+        const content = messageInput.value.trim();
+
+        if (!sender) {
+            senderInput.focus();
+            return;
+        }
+
+        if (!content && !selectedFile) return;
+
+        if (selectedFile) {
+            sendBtn.disabled = true;
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            try {
+                const response = await fetch('/api/media/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error('Upload failed with status ' + response.status);
+                const data = await response.json();
+
+                const chatMessage = {
+                    sender: sender,
+                    content: content,
+                    type: data.fileType,
+                    mediaUrl: data.fileUrl,
+                    fileName: data.fileName,
+                    fileSize: data.size,
+                    avatarUrl: currentUser ? currentUser.picture : null
+                };
+
+                stompClient.send("/app/sendMessage", {}, JSON.stringify(chatMessage));
+                messageInput.value = '';
+                clearAttachment();
+            } catch (err) {
+                alert('Media upload failed: ' + err.message);
+            } finally {
+                sendBtn.disabled = false;
+            }
+        } else {
+            const chatMessage = {
+                sender: sender,
+                content: content,
+                type: 'CHAT',
+                avatarUrl: currentUser ? currentUser.picture : null
+            };
+            stompClient.send("/app/sendMessage", {}, JSON.stringify(chatMessage));
+            messageInput.value = '';
+        }
+    }
+
+    sendBtn.onclick = sendMessage;
+
+    messageInput.addEventListener("keypress", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            sendMessage();
+        }
+    });
+</script>
+</body>
+</html>
