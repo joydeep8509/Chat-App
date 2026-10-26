@@ -2,46 +2,58 @@ package com.chat.app.controller;
 
 import com.chat.app.model.ChatMessage;
 import com.chat.app.repository.ChatMessageRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
-import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.handler.annotation.Payload;
-import org.springframework.messaging.handler.annotation.SendTo;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.messaging.handler.annotation.*;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/messages")
-@CrossOrigin(origins = {"http://localhost:3000", "http://127.0.0.1:3000"}, allowCredentials = "true")
+@CrossOrigin(originPatterns = "*", allowCredentials = "true")
 public class ChatController {
 
-    private static final Logger log = LoggerFactory.getLogger(ChatController.class);
-    private final ChatMessageRepository chatMessageRepository;
+    private final ChatMessageRepository repo;
+    private final SimpMessagingTemplate ws;
 
-    public ChatController(ChatMessageRepository chatMessageRepository) {
-        this.chatMessageRepository = chatMessageRepository;
+    public ChatController(ChatMessageRepository repo, SimpMessagingTemplate ws) {
+        this.repo = repo;
+        this.ws = ws;
     }
 
     @GetMapping("/history")
-    public ResponseEntity<List<ChatMessage>> getMessageHistory() {
-        log.info("Fetching message history");
-        List<ChatMessage> history = chatMessageRepository.findAllByOrderByTimestampAsc();
-        return ResponseEntity.ok(history);
+    public List<ChatMessage> getMessageHistory() {
+        return repo.findAllByOrderByTimestampAsc();
     }
 
     @MessageMapping("/sendMessage")
     @SendTo("/topic/messages")
-    public ChatMessage sendMessage(@Payload ChatMessage chatMessage) {
-        if (chatMessage.getTimestamp() == null) {
-            chatMessage.setTimestamp(LocalDateTime.now());
-        }
-        log.info("Persisting incoming STOMP message from sender: {}", chatMessage.getSender());
-        return chatMessageRepository.save(chatMessage);
+    public ChatMessage sendMessage(@Payload ChatMessage msg) {
+        if (msg.getTimestamp() == null) msg.setTimestamp(LocalDateTime.now());
+        return repo.save(msg);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteMessage(@PathVariable Long id) {
+        if (!repo.existsById(id)) return ResponseEntity.notFound().build();
+        repo.deleteById(id);
+        ws.convertAndSend("/topic/messages/delete", Map.of("id", id));
+        return ResponseEntity.ok(Map.of("status", "DELETED", "id", id));
+    }
+
+    @MessageMapping("/deleteMessage")
+    public void deleteSocket(@Payload Map<String, Object> payload) {
+        Object rawId = payload.get("id");
+        if (rawId == null) return;
+        try {
+            Long id = Long.valueOf(rawId.toString());
+            if (repo.existsById(id)) {
+                repo.deleteById(id);
+                ws.convertAndSend("/topic/messages/delete", Map.of("id", id));
+            }
+        } catch (NumberFormatException ignored) {}
     }
 }

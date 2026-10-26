@@ -9,16 +9,21 @@ interface ChatMessagesProps {
   messages: ChatMessage[];
   currentSender: string;
   onImageClick: (url: string) => void;
+  onDeleteMessage?: (id: number | string) => void;
 }
 
-export function ChatMessages({ messages, currentSender, onImageClick }: ChatMessagesProps) {
+export function ChatMessages({
+  messages,
+  currentSender,
+  onImageClick,
+  onDeleteMessage,
+}: ChatMessagesProps) {
   const feedRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef<boolean>(true);
 
   const handleScroll = useCallback(() => {
     if (!feedRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = feedRef.current;
-    // Considered near bottom if user is within 150px of the edge
     isNearBottomRef.current = scrollHeight - scrollTop - clientHeight < 150;
   }, []);
 
@@ -35,12 +40,11 @@ export function ChatMessages({ messages, currentSender, onImageClick }: ChatMess
     <div
       ref={feedRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-y-auto px-8 py-6 space-y-6 scroll-smooth flex flex-col"
+      className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 md:px-8 py-4 md:py-6 space-y-4 sm:space-y-6 scroll-smooth flex flex-col"
     >
       <div className="text-center text-xs text-emerald-800/60 font-semibold tracking-widest uppercase py-2 shrink-0">
         Connected to Design Chat WebSocket
       </div>
-
       {messages.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center opacity-75 mt-10">
           <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 mb-4 shadow-sm border border-emerald-200/60">
@@ -58,6 +62,7 @@ export function ChatMessages({ messages, currentSender, onImageClick }: ChatMess
             message={msg}
             isMine={msg.sender === currentSender && currentSender !== ''}
             onImageClick={onImageClick}
+            onDelete={onDeleteMessage}
           />
         ))
       )}

@@ -12,9 +12,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Allows SockJS connections from the Next.js origin
         registry.addEndpoint("/chat")
-                .setAllowedOriginPatterns("http://localhost:3000", "http://127.0.0.1:3000")
+                .setAllowedOriginPatterns("*")
                 .withSockJS();
     }
 

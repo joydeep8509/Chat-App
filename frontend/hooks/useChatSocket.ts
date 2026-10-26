@@ -5,73 +5,78 @@ import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { ChatMessage } from '@/types';
 
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || '/chat';
+
 export function useChatSocket(
-  isAuthenticated: boolean,
-  onMessageReceived: (message: ChatMessage) => void
+  enabled: boolean,
+  onMessageReceived: (message: ChatMessage) => void,
+  onMessageDeleted?: (id: number | string) => void
 ) {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const clientRef = useRef<Client | null>(null);
-  const onMessageReceivedRef = useRef(onMessageReceived);
 
   useEffect(() => {
-    onMessageReceivedRef.current = onMessageReceived;
-  }, [onMessageReceived]);
+    if (!enabled) return;
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      if (clientRef.current) {
-        clientRef.current.deactivate();
-        clientRef.current = null;
-        setIsConnected(false);
-      }
-      return;
-    }
-
-    // Connects through Next.js proxy route to preserve cookies and prevent CORS overhead
-    const socket = new SockJS('/chat');
-    const stompClient = new Client({
-      webSocketFactory: () => socket,
-      reconnectDelay: 5000,
+    const client = new Client({
+      webSocketFactory: () => new SockJS(WS_URL),
       debug: () => {},
+      reconnectDelay: 5000,
       onConnect: () => {
         setIsConnected(true);
-        stompClient.subscribe('/topic/messages', (frame) => {
-          if (frame.body) {
-            try {
-              const msg: ChatMessage = JSON.parse(frame.body);
-              onMessageReceivedRef.current(msg);
-            } catch (err) {
-              console.error('Failed to parse STOMP body', err);
+
+        client.subscribe('/topic/messages', (msg) => {
+          try {
+            onMessageReceived(JSON.parse(msg.body));
+          } catch (e) {
+            console.error('Failed to parse incoming message', e);
+          }
+        });
+
+        client.subscribe('/topic/messages/delete', (msg) => {
+          try {
+            const data = JSON.parse(msg.body);
+            if (data?.id != null && onMessageDeleted) {
+              onMessageDeleted(data.id);
             }
+          } catch (e) {
+            console.error('Failed to parse delete payload', e);
           }
         });
       },
-      onDisconnect: () => {
-        setIsConnected(false);
-      },
+      onDisconnect: () => setIsConnected(false),
       onStompError: (frame) => {
         console.error('STOMP broker error:', frame.headers['message']);
+        setIsConnected(false);
       },
     });
 
-    stompClient.activate();
-    clientRef.current = stompClient;
+    client.activate();
+    clientRef.current = client;
 
     return () => {
-      stompClient.deactivate();
-      clientRef.current = null;
+      client.deactivate();
       setIsConnected(false);
     };
-  }, [isAuthenticated]);
+  }, [enabled, onMessageReceived, onMessageDeleted]);
 
-  const sendMessage = useCallback((message: ChatMessage) => {
-    if (clientRef.current && clientRef.current.connected) {
+  const sendMessage = useCallback((msg: ChatMessage) => {
+    if (clientRef.current?.connected) {
       clientRef.current.publish({
         destination: '/app/sendMessage',
-        body: JSON.stringify(message),
+        body: JSON.stringify(msg),
       });
     }
   }, []);
 
-  return { isConnected, sendMessage };
+  const sendDelete = useCallback((id: number | string) => {
+    if (clientRef.current?.connected) {
+      clientRef.current.publish({
+        destination: '/app/deleteMessage',
+        body: JSON.stringify({ id }),
+      });
+    }
+  }, []);
+
+  return { isConnected, sendMessage, sendDelete };
 }

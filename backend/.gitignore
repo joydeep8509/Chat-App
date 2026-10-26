@@ -46,3 +46,10 @@ hs_err_pid*
 replay_pid*
 HELP.md
 .mvn/wrapper/maven-wrapper.jar
+
+# ==========================================
+# Application Configuration & Secrets
+# ==========================================
+src/main/resources/application.properties
+src/main/resources/application-*.properties
+application.properties
